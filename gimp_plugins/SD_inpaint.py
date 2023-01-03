@@ -50,7 +50,7 @@ def stable_diffusion_img2img(image):
     # save the images
     export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
     config_file = open(export_config_file, 'w')
-    config_file.write('img2img' + '|' + image_path + '|' + mask_path)
+    config_file.write('img2img' + '|' + image_path)
     config_file.close()
 
     if debug_logs_enabled:

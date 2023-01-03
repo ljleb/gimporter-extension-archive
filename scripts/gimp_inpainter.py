@@ -25,14 +25,21 @@ class PngHandler(FileSystemEventHandler):
             return
 
         with open(event.src_path, 'r') as config_file:
-            print(config_file.readlines())
-        print(event)
+            content = config_file.read().split('|')
+            set_images_in_viewport(*content)
+
 
 
 png_handler = PngHandler()
 observer = Observer()
 observer.schedule(png_handler, PngHandler.file_path)
 observer.start()
+
+
+def set_images_in_viewport(operation, image_path, mask_path=None):
+    print(operation)
+    print(image_path)
+    print(mask_path)
 
 
 class GimpScript(scripts.Script):

@@ -4,15 +4,17 @@ from gimpfu import *
 import gimpcolor
 import os
 
+working_dir = r'C:\Users\Plads\Documents\GitHub\stable diffusion\stable-diffusion-avidhjeren\extensions\gimp_inpainter\gimp_plugins'
+
 import sys
-sys.stderr = open(r'C:\Users\Plads\AppData\Roaming\GIMP\2.10\plug-ins\er.txt', 'w')
-sys.stdout = open(r'C:\Users\Plads\AppData\Roaming\GIMP\2.10\plug-ins\log.txt', 'w')
+sys.stderr = open(working_dir + r'\er.txt', 'w')
+sys.stdout = open(working_dir + r'\log.txt', 'w')
 
 
 debug_logs_enabled = True
 
 
-def stable_diffusion_script(image, output_file=r""):
+def stable_diffusion_script(image, output_file=working_dir):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
 
@@ -70,7 +72,7 @@ register(
     "RGB*, GRAY*",  # valid layer color type
     [
         (PF_IMAGE, "image", "takes current image", None),
-        (PF_DIRNAME, "output", "Output folder", '')
+        (PF_DIRNAME, "output", "Output folder", working_dir)
     ],
     [],
     stable_diffusion_script, menu="<Image>/Tools/Paint Tools")

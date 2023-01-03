@@ -1,2 +1,2 @@
-# gimp_inpaint_plugin
+# gimp inpaint plugin
 A gimp plugin for inpainting with stable diffusion. 

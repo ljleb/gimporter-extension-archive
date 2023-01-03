@@ -12,15 +12,10 @@ sys.stdout = open(r'C:\Users\Plads\AppData\Roaming\GIMP\2.10\plug-ins\log.txt', 
 debug_logs_enabled = True
 
 
-
-def sendall_to_connected_clients(payload):
-    for conn, addr in clients:
-        conn.sendall(payload)
-
-
-def stable_diffusion_script(image, drawable):
+def stable_diffusion_script(image, output_file=r""):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
+
     w, h, = image.active_layer.width, image.active_layer.height
     x, y = image.active_layer.offsets
 
@@ -34,17 +29,16 @@ def stable_diffusion_script(image, drawable):
     consolidated = image_copy.flatten()
     consolidated_region = consolidated.get_pixel_rgn(x, y, w, h, dirty=False)
 
-    send_image_data(consolidated_region, mask_region)
+    send_image_data(consolidated_region, mask_region, output_file)
 
     pdb.gimp_image_delete(image_copy)
     if debug_logs_enabled:
         pdb.gimp_message('script finished')
 
 
-def send_image_data(image, mask):
-    path = r"C:\Users\Plads\AppData\Roaming\GIMP\2.10\plug-ins"
-    save_region_as_image(image, 0, 0, path + "\\image.png")
-    save_region_as_image(mask, 1, 2, path + "\\mask.png")
+def send_image_data(image, mask, output_file):
+    save_region_as_image(image, 0, 0, output_file + "\\image.png")
+    save_region_as_image(mask, 1, 2, output_file + "\\mask.png")
 
 
 def save_region_as_image(region, image_type, layer_type, path):
@@ -76,7 +70,7 @@ register(
     "RGB*, GRAY*",  # valid layer color type
     [
         (PF_IMAGE, "image", "takes current image", None),
-        (PF_DRAWABLE, "drawable", "Input layer", None)
+        (PF_DIRNAME, "output", "Output folder", '')
     ],
     [],
     stable_diffusion_script, menu="<Image>/Tools/Paint Tools")

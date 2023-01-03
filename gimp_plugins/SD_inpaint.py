@@ -5,16 +5,18 @@ import gimpcolor
 import os
 
 working_dir = os.path.dirname(os.path.realpath(__file__))
+image_path = os.path.join(working_dir, 'image.png')
+mask_path = os.path.join(working_dir, 'mask.png')
 
 import sys
-sys.stderr = open(working_dir + r'\er.txt', 'w')
-sys.stdout = open(working_dir + r'\log.txt', 'w')
+sys.stderr = open(os.path.join(working_dir, 'er.txt'), 'w')
+sys.stdout = open(os.path.join(working_dir, 'log.txt'), 'w')
 
 
 debug_logs_enabled = True
 
 
-def stable_diffusion_inpaint(image, output_file=working_dir):
+def stable_diffusion_inpaint(image):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
 
@@ -28,7 +30,11 @@ def stable_diffusion_inpaint(image, output_file=working_dir):
     consolidated_region = consolidated_image.get_pixel_rgn(x, y, w, h, dirty=False)
 
     # save the images
-    send_image_data(consolidated_region, mask_region, output_file)
+    send_image_data(consolidated_region, mask_region)
+    export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
+    config_file = open(export_config_file, 'w')
+    config_file.write('inpaint' + '|' + image_path + '|' + mask_path)
+    config_file.close()
 
     # delete the copy
     pdb.gimp_image_delete(image_copy)
@@ -37,11 +43,15 @@ def stable_diffusion_inpaint(image, output_file=working_dir):
         pdb.gimp_message('script finished')
 
 
-def stable_diffusion_img2img(image, output_file=working_dir):
+def stable_diffusion_img2img(image):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
 
-    # code
+    # save the images
+    export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
+    config_file = open(export_config_file, 'w')
+    config_file.write('img2img' + '|' + image_path + '|' + mask_path)
+    config_file.close()
 
     if debug_logs_enabled:
         pdb.gimp_message('script finished')
@@ -62,9 +72,9 @@ def get_layer_mask(layer, x, y, w, h):
         raise Exception(exception_message)
 
 
-def send_image_data(image, mask, output_file):
-    save_region_as_image(mask, 1, 2, output_file + r"\mask.png")
-    save_region_as_image(image, 0, 0, output_file + r"\image.png")
+def send_image_data(image, mask):
+    save_region_as_image(image, 0, 0, image_path)
+    save_region_as_image(mask, 1, 2, mask_path)
 
 
 def save_region_as_image(region, image_type, layer_type, path):

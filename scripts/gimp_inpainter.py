@@ -2,6 +2,7 @@ import os.path
 import gradio as gr
 import modules.scripts as scripts
 import sys
+import time
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -12,29 +13,25 @@ base_dir = scripts.basedir()
 sys.path.append(base_dir)
 
 
-config_path = os.path.join(base_dir, 'user-config.cfg')
+# setting up watchdogs
+class PngHandler(FileSystemEventHandler):
+    file_path = os.path.join(base_dir, 'gimp_plugins')
+    paths_to_check = [
+        os.path.join(file_path, 'gimp_export_config.cfg'),
+    ]
+
+    def on_modified(self, event):
+        if event.src_path not in PngHandler.paths_to_check:
+            return
+
+        with open(event.src_path, 'r') as config_file:
+            print(config_file.readlines())
+        print(event)
 
 
-# setting up the watchdogs
-class ImageHandler(FileSystemEventHandler):
-    file_path = os.path.join(base_dir, 'gimp_plugins', 'image.png')
-
-    def on_any_event(self, event):
-        print('image received!')
-
-
-class MaskHandler(FileSystemEventHandler):
-    file_path = os.path.join(base_dir, 'gimp_plugins', 'mask.png')
-
-    def on_any_event(self, event):
-        print('mask received!')
-
-
-image_handler = ImageHandler()
-mask_handler = MaskHandler()
+png_handler = PngHandler()
 observer = Observer()
-observer.schedule(image_handler, ImageHandler.file_path)
-observer.schedule(mask_handler, MaskHandler.file_path)
+observer.schedule(png_handler, PngHandler.file_path)
 observer.start()
 
 

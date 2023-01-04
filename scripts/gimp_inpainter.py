@@ -22,7 +22,6 @@ image_args = {
 
 
 def update_image(tab, image):
-    print(f'{tab} demo.load: {image}')
     if image_args[tab] == image:
         return gr.update()
 
@@ -30,7 +29,6 @@ def update_image(tab, image):
 
 
 def update_image_args(tab, image):
-    print(f'{tab} image.change: {image}')
     if type(image) is dict:
         image_args[tab] = image['image']
     else:

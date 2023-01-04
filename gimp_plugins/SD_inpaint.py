@@ -7,6 +7,7 @@ import os
 working_dir = os.path.dirname(os.path.realpath(__file__))
 image_path = os.path.join(working_dir, 'image.png')
 mask_path = os.path.join(working_dir, 'mask.png')
+export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
 
 import sys
 sys.stderr = open(os.path.join(working_dir, 'er.txt'), 'w')
@@ -21,20 +22,15 @@ def stable_diffusion_inpaint(image):
         pdb.gimp_message('script is running')
 
     # get the mask of the layer as a pixel region
-    x, y, w, h = get_rect_of_layer(image.active_layer)
-    mask_region = get_layer_mask(image.active_layer, 0, 0, w, h)
+    rect = get_rect_of_layer(image.active_layer)
+    mask_region = get_layer_mask(image.active_layer, rect[2:])
 
     # get the image of the layer as a pixel region
-    image_copy = pdb.gimp_image_duplicate(image)
-    consolidated_image = image_copy.flatten()
-    consolidated_region = consolidated_image.get_pixel_rgn(x, y, w, h, dirty=False)
+    image_copy, consolidated_region = compute_image_region(image, rect, is_inpaint=True)
 
     # save the images
     send_image_data(consolidated_region, mask_region)
-    export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
-    config_file = open(export_config_file, 'w')
-    config_file.write('inpaint' + '|' + image_path + '|' + mask_path)
-    config_file.close()
+    export_config('inpaint' + '|' + image_path + '|' + mask_path)
 
     # delete the copy
     pdb.gimp_image_delete(image_copy)
@@ -47,14 +43,34 @@ def stable_diffusion_img2img(image):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
 
+    # get the image of the layer as a pixel region
+    rect = get_rect_of_layer(image.active_layer)
+    image_copy, consolidated_region = compute_image_region(image, rect)
+
     # save the images
-    export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
-    config_file = open(export_config_file, 'w')
-    config_file.write('img2img' + '|' + image_path)
-    config_file.close()
+    save_region_as_image(consolidated_region, 0, 0, image_path)
+    export_config('img2img' + '|' + image_path)
+
+    # delete the copy
+    pdb.gimp_image_delete(image_copy)
 
     if debug_logs_enabled:
         pdb.gimp_message('script finished')
+
+
+def export_config(content):
+    config_file = open(export_config_file, 'w')
+    config_file.write(content)
+    config_file.close()
+
+
+def compute_image_region(image, rect, is_inpaint=False):
+    image_copy = pdb.gimp_image_duplicate(image)
+    if is_inpaint:
+        pdb.gimp_layer_remove_mask(image_copy.active_layer, 1)
+    consolidated_image = image_copy.flatten()
+    consolidated_region = consolidated_image.get_pixel_rgn(*rect, dirty=False)
+    return image_copy, consolidated_region
 
 
 def get_rect_of_layer(layer):
@@ -63,9 +79,9 @@ def get_rect_of_layer(layer):
     return x, y, w, h
 
 
-def get_layer_mask(layer, x, y, w, h):
+def get_layer_mask(layer, dimensions):
     try:
-        return layer.mask.get_pixel_rgn(x, y, w, h, dirty=False)
+        return layer.mask.get_pixel_rgn(0, 0, *dimensions, dirty=False)
     except AttributeError:
         exception_message = 'error: no mask found on selected layer'
         pdb.gimp_message(exception_message)

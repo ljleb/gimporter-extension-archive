@@ -46,7 +46,7 @@ def create_ui_hijack(*args, original_function, **kwargs):
         demo.load(fn=update_image, inputs=[gr.State(tab), image], outputs=image, every=1)
 
         tab = 'inpaint_plus_mask'
-        # image_mask = generation_parameters_copypaste.paste_fields['inpaint']['init_img']
+        image_mask = generation_parameters_copypaste.paste_fields['inpaint']['init_img']
         # image_mask.change(fn=update_image_args, inputs=[gr.State(tab), image_mask], outputs=[])
         # demo.load(fn=update_image, inputs=[gr.State(tab), image_mask], outputs=image_mask, every=1)
 
@@ -57,8 +57,7 @@ def create_ui_hijack(*args, original_function, **kwargs):
         tab = 'inpaint_mask'
         image.change(fn=update_image_args, inputs=[gr.State(tab), mask], outputs=[])
         demo.load(fn=update_image, inputs=[gr.State(tab), mask], outputs=mask, every=1)
-    demo_queue = demo.queue
-    demo.queue = lambda *args, **kwargs: demo_queue()
+    demo_queue, demo.queue = demo.queue, lambda *_args, **_kwargs: demo_queue()
     return demo
 
 

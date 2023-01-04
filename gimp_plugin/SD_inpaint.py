@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from gimpfu import *
-import gimpcolor
 import os
 
 working_dir = os.path.dirname(os.path.realpath(__file__))
@@ -10,7 +9,7 @@ mask_path = os.path.join(working_dir, 'mask.png')
 export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
 
 import sys
-sys.stderr = open(os.path.join(working_dir, 'er.txt'), 'w')
+sys.stderr = open(os.path.join(working_dir, 'err.txt'), 'w')
 sys.stdout = open(os.path.join(working_dir, 'log.txt'), 'w')
 
 

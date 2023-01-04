@@ -15,7 +15,6 @@ sys.stdout = open(os.path.join(working_dir, 'log.txt'), 'w')
 
 debug_logs_enabled = True
 
-
 def stable_diffusion_inpaint(image):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
@@ -58,8 +57,16 @@ def stable_diffusion_img2img(image):
 
 
 def export_config(content):
+    try:
+        config_file = open(export_config_file, 'r')
+        previous_file_content = config_file.read().split('|')
+        config_file.close()
+        export_id = int(previous_file_content[0]) + 1
+    except (FileNotFoundError, ValueError):
+        export_id = 0
+    export_id = export_id % 2
     config_file = open(export_config_file, 'w')
-    config_file.write(content)
+    config_file.write(str(export_id) + '|' + content)
     config_file.close()
 
 

@@ -3,13 +3,17 @@ import sys
 base_dir = scripts.basedir()
 sys.path.append(base_dir)
 
-
-import os.path
+from modules import generation_parameters_copypaste
 from lib.config_watchdog import start_config_watchdog
+import os.path
+
+import gradio as gr
 
 
-def set_images_in_viewport(tab_id, image_path, mask_path=None):
-    pass
+def set_images_in_viewport(tab, image_path, mask_path=None):
+    image = generation_parameters_copypaste.paste_fields[tab]['init_img']
+    image.value = image_path
+    return
 
 
 gimp_plugin_path = os.path.join(base_dir, 'gimp_plugin')

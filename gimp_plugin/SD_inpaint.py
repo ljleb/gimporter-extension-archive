@@ -6,7 +6,7 @@ import os
 working_dir = os.path.dirname(os.path.realpath(__file__))
 image_path = os.path.join(working_dir, 'image.png')
 mask_path = os.path.join(working_dir, 'mask.png')
-export_config_file = os.path.join(working_dir, 'gimp_export_config.cfg')
+export_config_file = os.path.join(working_dir, 'send_to_webui.cfg')
 
 import sys
 sys.stderr = open(os.path.join(working_dir, 'err.txt'), 'w')

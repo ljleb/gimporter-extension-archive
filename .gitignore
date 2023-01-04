@@ -8,3 +8,8 @@ __pycache__/
 
 # Jetbrains
 *.idea
+
+# gimp plugin
+gimp_plugin/*.png
+gimp_plugin/*.txt
+gimp_plugin/send_to_webui.cfg

@@ -1,19 +1,51 @@
-import modules.scripts as scripts
+from modules import scripts
 import sys
 base_dir = scripts.basedir()
 sys.path.append(base_dir)
 
-from modules import generation_parameters_copypaste
+from modules import generation_parameters_copypaste, shared
 from lib.config_watchdog import start_config_watchdog
 import os.path
+
+from lib.hijacker import scripts_hijacker
 
 import gradio as gr
 
 
+image_args = {
+    'img2img': None,
+    'inpaint': None,
+}
+
+
+def update_image(tab, image):
+    print(f'{tab} demo.load: {image}')
+    if image_args[tab] == image:
+        return gr.update()
+
+    return image_args[tab]
+
+
+def update_image_args(tab, image):
+    print(f'{tab} image.change: {image}')
+    if type(image) is dict:
+        image_args[tab] = image['image']
+    else:
+        image_args[tab] = image
+
+
+@scripts_hijacker.hijack('create_ui')
+def create_ui_hijack(*args, original_function, **kwargs):
+    with original_function(*args, **kwargs) as demo:
+        for tab in ['img2img', 'inpaint']:
+            image = generation_parameters_copypaste.paste_fields[tab]['init_img']
+            image.change(fn=update_image_args, inputs=[gr.State(tab), image], outputs=[])
+            demo.load(fn=update_image, inputs=[gr.State(tab), image], outputs=image, every=1)
+    return demo
+
+
 def set_images_in_viewport(tab, image_path, mask_path=None):
-    image = generation_parameters_copypaste.paste_fields[tab]['init_img']
-    image.value = image_path
-    return
+    image_args[tab] = image_path
 
 
 gimp_plugin_path = os.path.join(base_dir, 'gimp_plugin')

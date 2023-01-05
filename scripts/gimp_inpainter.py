@@ -1,69 +1,100 @@
-from modules import scripts
+from modules import scripts, shared, script_callbacks
 import sys
 base_dir = scripts.basedir()
 sys.path.append(base_dir)
 
-from modules import generation_parameters_copypaste, shared
 from lib.config_watchdog import start_config_watchdog
 import os.path
-
-from lib.hijacker import scripts_hijacker
-
+from PIL import Image
 import gradio as gr
 
 
-image_args = {
-    'img2img': None,
-    'inpaint': None,
-    'inpaint_plus_mask': None,
-    'img2img_mask': None,
-    'inpaint_mask': None,
-}
+class StateChange:
+    def __init__(self, new, old):
+        self.new = new
+        self.old = old
 
 
-def update_image(tab, image):
-    if image_args[tab] == image:
-        return gr.update()
-
-    return image_args[tab]
+ui_images = dict()
+image_states = dict()
 
 
-def update_image_args(tab, image):
-    if type(image) is dict:
-        image_args[tab] = image['image']
-    else:
-        image_args[tab] = image
+def on_after_leaf_component(component, **kwargs):
+    global ui_images
+
+    if 'elem_id' in kwargs:
+        elem_id = kwargs['elem_id']
+        if elem_id in {'img2img_image', 'img2maskimg', 'img_inpaint_base', 'img_inpaint_mask'}:
+            ui_images[elem_id] = component
+            image_states[elem_id] = StateChange(None, None)
+            register_load_callback(elem_id, component)
 
 
-@scripts_hijacker.hijack('create_ui')
-def create_ui_hijack(*args, original_function, **kwargs):
-    with original_function(*args, **kwargs) as demo:
-        tab = 'img2img'
-        image = generation_parameters_copypaste.paste_fields[tab]['init_img']
-        image.change(fn=update_image_args, inputs=[gr.State(tab), image], outputs=[])
-        demo.load(fn=update_image, inputs=[gr.State(tab), image], outputs=image, every=1)
+script_callbacks.on_after_component(on_after_leaf_component)
 
-        tab = 'inpaint_plus_mask'
-        image_mask = generation_parameters_copypaste.paste_fields['inpaint']['init_img']
-        # image_mask.change(fn=update_image_args, inputs=[gr.State(tab), image_mask], outputs=[])
-        # demo.load(fn=update_image, inputs=[gr.State(tab), image_mask], outputs=image_mask, every=1)
 
-        tab = 'inpaint'
-        image, mask = image_mask.parent.children[2:4]
-        image.change(fn=update_image_args, inputs=[gr.State(tab), image], outputs=[])
-        demo.load(fn=update_image, inputs=[gr.State(tab), image], outputs=image, every=1)
-        tab = 'inpaint_mask'
-        image.change(fn=update_image_args, inputs=[gr.State(tab), mask], outputs=[])
-        demo.load(fn=update_image, inputs=[gr.State(tab), mask], outputs=mask, every=1)
-    demo_queue, demo.queue = demo.queue, lambda *_args, **_kwargs: demo_queue()
-    return demo
+def register_load_callback(elem_id, ui_image):
+    dummy_state = gr.State()
+    gr.Button(visible=False, elem_id=f'gimp_refresh_{elem_id}').click(
+        fn=get_image_update(elem_id, ui_image, dummy_state),
+        inputs=[],
+        outputs=[ui_image, dummy_state]
+    )
+    ui_image.change(
+        fn=set_image_state(elem_id, ui_image),
+        inputs=[ui_image],
+        outputs=[]
+    )
+
+
+def get_image_update(elem_id, ui_image, dummy_state):
+    def inner():
+        state = image_states[elem_id]
+        if state.old != state.new:
+            state.old = state.new
+            return {ui_image: gr.Image.update(state.new)}
+
+        return {dummy_state: gr.update(value=None)}
+
+    def inner_img2maskimg():
+        res = inner()
+        if ui_image in res:
+            ui_image.tool = None
+            res[ui_image]['value'] = res[ui_image]['value']['image']
+
+        return res
+
+    if elem_id == 'img2maskimg':
+        return inner_img2maskimg
+
+    return inner
+
+
+def set_image_state(elem_id, ui_image):
+    def inner(pil_image):
+        if pil_image is not None:
+            state = image_states[elem_id]
+            state.old, state.new = pil_image, pil_image
+
+    def inner_img2maskimg(pil_image):
+        inner(pil_image)
+        if ui_image.tool is None:
+            ui_image.tool = shared.cmd_opts.gradio_inpaint_tool
+
+    if elem_id == 'img2maskimg':
+        return inner_img2maskimg
+
+    return inner
 
 
 def set_images_in_viewport(tab, image_path, mask_path=None):
-    image_args[tab] = image_path
-    image_args[f'{tab}_mask'] = mask_path
-    if tab == 'inpaint':
-        image_args['inpaint_plus_mask'] = image_path
+    if tab == 'inpaint' and mask_path is None:
+        image_states['img2maskimg'].new = {'image': Image.open(image_path)}
+    elif tab == 'inpaint' and mask_path is not None:
+        image_states['img_inpaint_base'].new = Image.open(image_path)
+        image_states['img_inpaint_mask'].new = Image.open(mask_path)
+    elif tab == 'img2img':
+        image_states['img2img_image'].new = Image.open(image_path)
 
 
 gimp_plugin_path = os.path.join(base_dir, 'gimp_plugin')
@@ -74,17 +105,8 @@ class GimpScript(scripts.Script):
     def title(self):
         return "Gimp-extension"
 
-    def ui(self, is_img2img):
-        pass
-
     def show(self, is_img2img):
-        return scripts.AlwaysVisible
-
-    def run(self, p, *args):
-        pass
-
-    def postprocess(self, p, res, *args):
-        pass  # send images back to gimp
+        return False
 
 
 print('[gimp-inpaint] done init')

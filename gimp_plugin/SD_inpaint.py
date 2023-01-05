@@ -15,20 +15,25 @@ sys.stdout = open(os.path.join(working_dir, 'log.txt'), 'w')
 
 debug_logs_enabled = True
 
+
 def stable_diffusion_inpaint(image):
     if debug_logs_enabled:
         pdb.gimp_message('script is running')
 
     # get the mask of the layer as a pixel region
-    rect = get_rect_of_layer(image.active_layer)
-    mask_region = get_layer_mask(image.active_layer, rect[2:])
+    dimensions = get_dimensions_of_layer(image.active_layer)
+    mask_region = get_layer_mask(image.active_layer, dimensions)
 
     # get the image of the layer as a pixel region
-    image_copy, consolidated_region = compute_image_region(image, rect, is_inpaint=True)
+    image_copy, layer_region = compute_image_region(image, dimensions)
 
     # save the images
-    send_image_data(consolidated_region, mask_region)
-    export_config('inpaint' + '|' + image_path + '|' + mask_path)
+    if mask_region is not None:
+        send_image_data(layer_region, mask_region)
+        export_config('inpaint' + '|' + image_path + '|' + mask_path)
+    else:
+        save_region_as_image(layer_region, 0, 0, image_path)
+        export_config('inpaint' + '|' + image_path)
 
     # delete the copy
     pdb.gimp_image_delete(image_copy)
@@ -42,11 +47,11 @@ def stable_diffusion_img2img(image):
         pdb.gimp_message('script is running')
 
     # get the image of the layer as a pixel region
-    rect = get_rect_of_layer(image.active_layer)
-    image_copy, consolidated_region = compute_image_region(image, rect)
+    dimensions = get_dimensions_of_layer(image.active_layer)
+    image_copy, layer_region = compute_image_region(image, dimensions)
 
     # save the images
-    save_region_as_image(consolidated_region, 0, 0, image_path)
+    save_region_as_image(layer_region, 0, 0, image_path)
     export_config('img2img' + '|' + image_path)
 
     # delete the copy
@@ -62,7 +67,7 @@ def export_config(content):
         previous_file_content = config_file.read().split('|')
         config_file.close()
         export_id = int(previous_file_content[0]) + 1
-    except (FileNotFoundError, ValueError):
+    except (IOError, ValueError):
         export_id = 0
     export_id = export_id % 2
     config_file = open(export_config_file, 'w')
@@ -70,28 +75,24 @@ def export_config(content):
     config_file.close()
 
 
-def compute_image_region(image, rect, is_inpaint=False):
+def compute_image_region(image, dimensions):
     image_copy = pdb.gimp_image_duplicate(image)
-    if is_inpaint:
+    if image_copy.active_layer.mask is not None:
         pdb.gimp_layer_remove_mask(image_copy.active_layer, 1)
-    consolidated_image = image_copy.flatten()
-    consolidated_region = consolidated_image.get_pixel_rgn(*rect, dirty=False)
-    return image_copy, consolidated_region
+    layer_region = image_copy.active_layer.get_pixel_rgn(0, 0, *dimensions, dirty=False)
+    return image_copy, layer_region
 
 
-def get_rect_of_layer(layer):
+def get_dimensions_of_layer(layer):
     w, h, = layer.width, layer.height
-    x, y = layer.offsets
-    return x, y, w, h
+    return w, h
 
 
 def get_layer_mask(layer, dimensions):
     try:
         return layer.mask.get_pixel_rgn(0, 0, *dimensions, dirty=False)
     except AttributeError:
-        exception_message = 'error: no mask found on selected layer'
-        pdb.gimp_message(exception_message)
-        raise Exception(exception_message)
+        return None
 
 
 def send_image_data(image, mask):
@@ -105,6 +106,8 @@ def save_region_as_image(region, image_type, layer_type, path):
 
     # Create a new layer to hold the image data
     layer = gimp.Layer(image, "layer", region.w, region.h, layer_type, 100, 0)
+    if region.bpp == 4:
+        layer.add_alpha()
     image.add_layer(layer)
 
     # Copy the data from the region into the layer

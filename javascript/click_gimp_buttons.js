@@ -1,7 +1,11 @@
-function click_gimp_refresh_buttons() {
-    ['img2img_image', 'img2maskimg', 'img_inpaint_base', 'img_inpaint_mask'].forEach(elem_id => {
-        gradioApp().querySelector(`#gimp_refresh_${elem_id}`).click();
-    })
-}
+const socket = new WebSocket("ws://localhost:7861");
 
-setInterval(click_gimp_refresh_buttons, 3000);
+socket.addEventListener('open', e => {
+    console.log('[gimporter] connection to the websockets server established');
+});
+
+socket.addEventListener('message', e => {
+    elem_id = e.data;
+    console.log(`[gimporter] received elem_id`, elem_id);
+    gradioApp().querySelector(`#gimp_refresh_${elem_id}`).click();
+});

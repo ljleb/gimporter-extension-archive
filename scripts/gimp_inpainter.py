@@ -8,12 +8,7 @@ import os.path
 from PIL import Image
 import gradio as gr
 
-
-class StateChange:
-    def __init__(self, new, old):
-        self.new = new
-        self.old = old
-
+import lib.websockets_server
 
 ui_images = dict()
 image_states = dict()
@@ -26,7 +21,7 @@ def on_after_leaf_component(component, **kwargs):
         elem_id = kwargs['elem_id']
         if elem_id in {'img2img_image', 'img2maskimg', 'img_inpaint_base', 'img_inpaint_mask'}:
             ui_images[elem_id] = component
-            image_states[elem_id] = StateChange(None, None)
+            image_states[elem_id] = None
             register_load_callback(elem_id, component)
 
 
@@ -34,11 +29,10 @@ script_callbacks.on_after_component(on_after_leaf_component)
 
 
 def register_load_callback(elem_id, ui_image):
-    dummy_state = gr.State()
     gr.Button(visible=False, elem_id=f'gimp_refresh_{elem_id}').click(
-        fn=get_image_update(elem_id, ui_image, dummy_state),
+        fn=get_image_update(elem_id, ui_image),
         inputs=[],
-        outputs=[ui_image, dummy_state]
+        outputs=[ui_image]
     )
     ui_image.change(
         fn=set_image_state(elem_id, ui_image),
@@ -47,21 +41,14 @@ def register_load_callback(elem_id, ui_image):
     )
 
 
-def get_image_update(elem_id, ui_image, dummy_state):
+def get_image_update(elem_id, ui_image):
     def inner():
-        state = image_states[elem_id]
-        if state.old != state.new:
-            state.old = state.new
-            return {ui_image: gr.Image.update(state.new)}
-
-        return {dummy_state: gr.update(value=None)}
+        return gr.Image.update(image_states[elem_id])
 
     def inner_img2maskimg():
         res = inner()
-        if ui_image in res:
-            ui_image.tool = None
-            res[ui_image]['value'] = res[ui_image]['value']['image']
-
+        ui_image.tool = None
+        res['value'] = res['value']['image']
         return res
 
     if elem_id == 'img2maskimg':
@@ -73,8 +60,7 @@ def get_image_update(elem_id, ui_image, dummy_state):
 def set_image_state(elem_id, ui_image):
     def inner(pil_image):
         if pil_image is not None:
-            state = image_states[elem_id]
-            state.old, state.new = pil_image, pil_image
+            image_states[elem_id] = pil_image
 
     def inner_img2maskimg(pil_image):
         inner(pil_image)
@@ -88,17 +74,23 @@ def set_image_state(elem_id, ui_image):
 
 
 def set_images_in_viewport(tab, image_path, mask_path=None):
+    to_enqueue = []
+
     if tab == 'inpaint' and mask_path is None:
-        image_states['img2maskimg'].new = {'image': Image.open(image_path)}
+        image_states['img2maskimg'] = {'image': Image.open(image_path)}
+        to_enqueue.append('img2maskimg')
+
     elif tab == 'inpaint' and mask_path is not None:
-        image_states['img_inpaint_base'].new = Image.open(image_path)
-        image_states['img_inpaint_mask'].new = Image.open(mask_path)
+        image_states['img_inpaint_base'] = Image.open(image_path)
+        image_states['img_inpaint_mask'] = Image.open(mask_path)
+        to_enqueue.extend(['img_inpaint_base', 'img_inpaint_mask'])
+
     elif tab == 'img2img':
-        image_states['img2img_image'].new = Image.open(image_path)
+        image_states['img2img_image'] = Image.open(image_path)
+        to_enqueue.append('img2img_image')
 
-
-gimp_plugin_path = os.path.join(base_dir, 'gimp_plugin')
-observer = start_config_watchdog(gimp_plugin_path, set_images_in_viewport)
+    if to_enqueue:
+        lib.websockets_server.elem_ids_queue.put(to_enqueue)
 
 
 class GimpScript(scripts.Script):
@@ -109,4 +101,7 @@ class GimpScript(scripts.Script):
         return False
 
 
-print('[gimp-inpaint] done init')
+gimp_plugin_path = os.path.join(base_dir, 'gimp_plugin')
+watchdog_thread = start_config_watchdog(gimp_plugin_path, set_images_in_viewport)
+lib.websockets_server.start_server()
+print('[gimporter] done init')

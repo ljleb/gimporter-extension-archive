@@ -1,16 +1,17 @@
 #!/usr/bin/env python
-
 from gimpfu import *
 import os
+import sys
+import socket
 
 working_dir = os.path.dirname(os.path.realpath(__file__))
-image_path = os.path.join(working_dir, 'image.png')
-mask_path = os.path.join(working_dir, 'mask.png')
-export_config_file = os.path.join(working_dir, 'send_to_webui.cfg')
-
-import sys
 sys.stderr = open(os.path.join(working_dir, 'err.txt'), 'w')
 sys.stdout = open(os.path.join(working_dir, 'log.txt'), 'w')
+
+# Create a socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# webui address
+server_address = ('localhost', 7861)
 
 
 debug_logs_enabled = True
@@ -27,13 +28,13 @@ def stable_diffusion_inpaint(image):
     # get the image of the layer as a pixel region
     image_copy, layer_region = compute_image_region(image, dimensions)
 
-    # save the images
+    # send images to the webui
+    image_packet = region_to_bytearray_packets(layer_region)
     if mask_region is not None:
-        send_image_data(layer_region, mask_region)
-        export_config('inpaint' + '|' + image_path + '|' + mask_path)
+        mask_packet = region_to_bytearray_packets(mask_region)
+        send_to_webui('inpain2' + image_packet + mask_packet)
     else:
-        save_region_as_image(layer_region, 0, 0, image_path)
-        export_config('inpaint' + '|' + image_path)
+        send_to_webui('inpaint' + image_packet)
 
     # delete the copy
     pdb.gimp_image_delete(image_copy)
@@ -50,9 +51,9 @@ def stable_diffusion_img2img(image):
     dimensions = get_dimensions_of_layer(image.active_layer)
     image_copy, layer_region = compute_image_region(image, dimensions)
 
-    # save the images
-    save_region_as_image(layer_region, 0, 0, image_path)
-    export_config('img2img' + '|' + image_path)
+    # send the image to the webui
+    image_packet = region_to_bytearray_packets(layer_region)
+    send_to_webui('img2img' + image_packet)
 
     # delete the copy
     pdb.gimp_image_delete(image_copy)
@@ -61,18 +62,31 @@ def stable_diffusion_img2img(image):
         pdb.gimp_message('script finished')
 
 
-def export_config(content):
-    try:
-        config_file = open(export_config_file, 'r')
-        previous_file_content = config_file.read().split('|')
-        config_file.close()
-        export_id = int(previous_file_content[0]) + 1
-    except (IOError, ValueError):
-        export_id = 0
-    export_id = export_id % 2
-    config_file = open(export_config_file, 'w')
-    config_file.write(str(export_id) + '|' + content)
-    config_file.close()
+def region_to_bytearray_packets(region):
+    image_size = region.w * region.h * region.bpp
+    flat_image_data = bytearray(image_size)
+    flat_image_data[:] = region[:, :]
+    width_bytes = int_to_bytearray(region.w, 4, 'big')
+    height_bytes = int_to_bytearray(region.h, 4, 'big')
+    bpp_bytes = int_to_bytearray(region.bpp, 4, 'big')
+    image_size_bytes = int_to_bytearray(image_size, 4, 'big')
+    return str(width_bytes) + str(height_bytes) + str(bpp_bytes) + str(image_size_bytes) + str(flat_image_data)
+
+
+def send_to_webui(data):
+    connect_to_webui()
+
+    # Prepare the packet
+    amount_to_send = len(data)
+    amount_to_send_bytes = int_to_bytearray(amount_to_send, 4, 'big')
+
+    # Send the data
+    sock.sendall(amount_to_send_bytes)
+    sock.sendall(data)
+
+
+def connect_to_webui():
+    sock.connect(server_address)
 
 
 def compute_image_region(image, dimensions):
@@ -95,31 +109,15 @@ def get_layer_mask(layer, dimensions):
         return None
 
 
-def send_image_data(image, mask):
-    save_region_as_image(image, 0, 0, image_path)
-    save_region_as_image(mask, 1, 2, mask_path)
-
-
-def save_region_as_image(region, image_type, layer_type, path):
-    # Create a new image with the same dimensions as the region
-    image = gimp.Image(region.w, region.h, image_type)
-
-    # Create a new layer to hold the image data
-    layer = gimp.Layer(image, "layer", region.w, region.h, layer_type, 100, 0)
-    if region.bpp == 4:
-        layer.add_alpha()
-    image.add_layer(layer)
-
-    # Copy the data from the region into the layer
-    layer_region = layer.get_pixel_rgn(0, 0, region.w, region.h, True, False)
-    layer_region[:, :] = region[:, :]
-
-    # Save the image to the specified file path
-    pdb.gimp_file_save(image, layer, path, path)
-
-    # Clean up
-    image.remove_layer(layer)
-    gimp.delete(image)
+def int_to_bytearray(x, amount, indian_type='big'):
+    buff = []
+    if indian_type == 'little':
+        for i in range(amount):
+            buff.append((x & (255 << (i * 8))) >> (i * 8))
+    elif indian_type == 'big':
+        for i in range(amount - 1, -1, -1):
+            buff.append((x & (255 << (i * 8))) >> (i * 8))
+    return bytearray(buff)
 
 
 register(

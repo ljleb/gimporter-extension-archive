@@ -4,6 +4,7 @@ import threading
 import queue
 
 
+websocket_server_address = ('localhost', 7862)
 _connected_clients = set()
 
 
@@ -22,15 +23,13 @@ async def server_main(local_elem_ids_queue):
             websockets.broadcast(_connected_clients, elem_id)
 
 
-server_loop = asyncio.new_event_loop()
-
-
 async def start_server_async(local_elem_ids_queue):
-    async with websockets.serve(accept_connection, "localhost", 7861):
+    async with websockets.serve(accept_connection, *websocket_server_address):
         await server_main(local_elem_ids_queue)
 
 
 def start_server_sync(local_elem_ids_queue):
+    server_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(server_loop)
     asyncio.run(start_server_async(local_elem_ids_queue))
 
@@ -40,4 +39,6 @@ _server_thread = threading.Thread(target=start_server_sync, args=(elem_ids_queue
 
 
 def start_server():
-    _server_thread.start()
+    if not _server_thread.ident:
+        _server_thread.start()
+        print(f'[gimporter] websocket server started on {websocket_server_address[0]}:{websocket_server_address[1]}')

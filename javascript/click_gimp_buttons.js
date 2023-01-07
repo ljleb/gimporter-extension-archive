@@ -1,4 +1,4 @@
-const socket = new WebSocket("ws://localhost:7861");
+const socket = new WebSocket("ws://localhost:7862");
 
 socket.addEventListener('open', e => {
     console.log('[gimporter] connection to the websockets server established');
